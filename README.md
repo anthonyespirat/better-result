@@ -211,6 +211,29 @@ Every `Ok` is unwrapped. The first `Err` short-circuits the generator. Errors fr
 
 A tagged error can be yielded directly for a guard clause. This is equivalent to `yield* Result.err(new EmptyCart(...))`; it returns an `Err` and does not throw.
 
+### Pass `this` to a generator
+
+Pass the receiver first to access instance fields and methods without capturing `this` in a local variable:
+
+```ts
+class PriceCalculator {
+  #multiplier = 2;
+
+  calculate(amount: number) {
+    return Result.gen(this, function* () {
+      const value = yield* Result.ok(amount);
+      return Result.ok(value * this.#multiplier);
+    });
+  }
+}
+
+new PriceCalculator().calculate(21).unwrap(); // 42
+```
+
+TypeScript infers `this` from the receiver. The same form works with `Result.gen(this, async function* () { ... })` and `Result.await`.
+
+The two-argument form is now receiver-first. Change `Result.gen(body, thisArg)` to `Result.gen(thisArg, body)`. Single-argument calls are unchanged.
+
 ### Handle the complete error union
 
 Use `Result.match` to handle success versus failure, then match the tagged error union:

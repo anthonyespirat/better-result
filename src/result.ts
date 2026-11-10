@@ -463,28 +463,31 @@ const gen: {
     body: () => Generator<Yield, R, unknown>,
   ): Result<InferOk<R>, InferYieldErr<Yield> | InferErr<R>>;
   <Yield extends Err<never, unknown>, R extends AnyResult, This>(
-    body: (this: This) => Generator<Yield, R, unknown>,
     thisArg: This,
+    body: (this: This) => Generator<Yield, R, unknown>,
   ): Result<InferOk<R>, InferYieldErr<Yield> | InferErr<R>>;
   <Yield extends Err<never, unknown>, R extends AnyResult>(
     body: () => AsyncGenerator<Yield, R, unknown>,
   ): Promise<Result<InferOk<R>, InferYieldErr<Yield> | InferErr<R>>>;
   <Yield extends Err<never, unknown>, R extends AnyResult, This>(
-    body: (this: This) => AsyncGenerator<Yield, R, unknown>,
     thisArg: This,
+    body: (this: This) => AsyncGenerator<Yield, R, unknown>,
   ): Promise<Result<InferOk<R>, InferYieldErr<Yield> | InferErr<R>>>;
 } = (<Yield extends Err<never, unknown>, R extends AnyResult, This>(
-  body:
+  bodyOrThisArg:
+    | This
     | (() => Generator<Yield, R, unknown>)
-    | (() => AsyncGenerator<Yield, R, unknown>)
-    | ((this: This) => Generator<Yield, R, unknown>)
-    | ((this: This) => AsyncGenerator<Yield, R, unknown>),
-  thisArg?: This,
+    | (() => AsyncGenerator<Yield, R, unknown>),
+  body?: (this: This) => Generator<Yield, R, unknown> | AsyncGenerator<Yield, R, unknown>,
 ):
   | Result<InferOk<R>, InferYieldErr<Yield> | InferErr<R>>
   | Promise<Result<InferOk<R>, InferYieldErr<Yield> | InferErr<R>>> => {
-  // SAFETY: body.call binds thisArg; cast needed due to union of function signatures
-  const iterator = (body as (this: This) => Generator<Yield, R, unknown>).call(thisArg as This);
+  // SAFETY: With two arguments, overloads guarantee the first is the receiver.
+  // With one argument, overloads guarantee it is the generator body.
+  const iterator =
+    body === undefined
+      ? (bodyOrThisArg as () => Generator<Yield, R, unknown> | AsyncGenerator<Yield, R, unknown>)()
+      : body.call(bodyOrThisArg as This);
 
   // Detect async generator via Symbol.asyncIterator
   if (Symbol.asyncIterator in iterator) {
@@ -546,15 +549,15 @@ const gen: {
     body: () => Generator<Yield, R, unknown>,
   ): Result<InferOk<R>, InferYieldErr<Yield> | InferErr<R>>;
   <Yield extends Err<never, unknown>, R extends AnyResult, This>(
-    body: (this: This) => Generator<Yield, R, unknown>,
     thisArg: This,
+    body: (this: This) => Generator<Yield, R, unknown>,
   ): Result<InferOk<R>, InferYieldErr<Yield> | InferErr<R>>;
   <Yield extends Err<never, unknown>, R extends AnyResult>(
     body: () => AsyncGenerator<Yield, R, unknown>,
   ): Promise<Result<InferOk<R>, InferYieldErr<Yield> | InferErr<R>>>;
   <Yield extends Err<never, unknown>, R extends AnyResult, This>(
-    body: (this: This) => AsyncGenerator<Yield, R, unknown>,
     thisArg: This,
+    body: (this: This) => AsyncGenerator<Yield, R, unknown>,
   ): Promise<Result<InferOk<R>, InferYieldErr<Yield> | InferErr<R>>>;
 };
 
@@ -1368,6 +1371,7 @@ export const Result = {
   /**
    * Generator-based composition for Result types.
    * Errors from yielded Results form a union; use mapError to normalize.
+   * Pass a receiver before the body to bind and infer the generator's `this`.
    *
    * @example
    * const result = Result.gen(function* () {
@@ -1393,6 +1397,17 @@ export const Result = {
    *   const b = yield* Result.await(fetchB(a));
    *   return Result.ok({ a, b });
    * });
+   *
+   * @example
+   * class Multiplier {
+   *   readonly factor = 2;
+   *   calculate(value: number) {
+   *     return Result.gen(this, function* () {
+   *       const n = yield* Result.ok(value);
+   *       return Result.ok(n * this.factor);
+   *     });
+   *   }
+   * }
    */
   gen,
   /**

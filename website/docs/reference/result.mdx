@@ -61,11 +61,13 @@ All support data-first and data-last forms. Callback failure throws `Panic`.
 
 ## Generators
 
-| API                                      | Purpose                                                      |
-| ---------------------------------------- | ------------------------------------------------------------ |
-| `Result.gen(function* () { ... })`       | Compose synchronous Results with `yield*`                    |
-| `Result.gen(async function* () { ... })` | Compose sync and async Results                               |
-| `Result.await(promise)`                  | Make `Promise<Result<T, E>>` yieldable in an async generator |
+| API                                               | Purpose                                                      |
+| ------------------------------------------------- | ------------------------------------------------------------ |
+| `Result.gen(function* () { ... })`                | Compose synchronous Results with `yield*`                    |
+| `Result.gen(async function* () { ... })`          | Compose sync and async Results                               |
+| `Result.gen(thisArg, function* () { ... })`       | Compose synchronous Results with an inferred `this` receiver |
+| `Result.gen(thisArg, async function* () { ... })` | Compose async Results with an inferred `this` receiver       |
+| `Result.await(promise)`                           | Make `Promise<Result<T, E>>` yieldable in an async generator |
 
 ## Collections
 

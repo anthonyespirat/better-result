@@ -54,6 +54,44 @@ const dashboard = await Result.gen(async function* () {
 
 Do not write `yield* await fetchUser()`. `Result.await` supplies the async iterable protocol needed by the generator and preserves the error type.
 
+## Passing `this`
+
+Pass the receiver before the generator body to access instance fields and methods:
+
+```ts
+class PriceCalculator {
+  #multiplier = 2;
+
+  calculate(amount: number) {
+    return Result.gen(this, function* () {
+      const value = yield* Result.ok(amount);
+      return Result.ok(value * this.#multiplier);
+    });
+  }
+}
+
+new PriceCalculator().calculate(21).unwrap(); // 42
+```
+
+TypeScript infers the generator's `this` from the first argument. No explicit `this` annotation or `.bind(this)` is needed. Private fields are accessible because the generator uses the original receiver.
+
+Async generators use the same argument order. The receiver remains available after asynchronous yields and inside cleanup:
+
+```ts
+const receiver = {
+  multiplier: 2,
+  read: () => Promise.resolve(Result.ok(21)),
+};
+
+const result = await Result.gen(receiver, async function* () {
+  const value = yield* Result.await(this.read());
+  return Result.ok(value * this.multiplier);
+});
+// Result<number, never>, with value 42
+```
+
+The two-argument form is now receiver-first. Migrate `Result.gen(body, thisArg)` to `Result.gen(thisArg, body)`. The single-argument sync and async forms are unchanged.
+
 ## Cleanup behavior
 
 When an `Err` short-circuits, `Result.gen` closes the generator so `finally`, `Symbol.dispose`, and `Symbol.asyncDispose` cleanup can run. If generator body or cleanup code throws, `Result.gen` throws `Panic`.

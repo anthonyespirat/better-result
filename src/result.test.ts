@@ -1644,15 +1644,48 @@ describe("Result", () => {
       }
     });
 
-    it("supports this binding", () => {
-      const ctx = { multiplier: 10 };
+    it("binds the receiver before the body, including private fields", () => {
+      class Multiplier {
+        #multiplier = 10;
 
-      const result = Result.gen(function* (this: typeof ctx) {
-        const a = yield* Result.ok(5);
-        return Result.ok(a * this.multiplier);
-      }, ctx);
+        compute() {
+          return Result.gen(this, function* () {
+            const a = yield* Result.ok(5);
+            return Result.ok(a * this.#multiplier);
+          });
+        }
+      }
 
-      expect(result.unwrap()).toBe(50);
+      expect(new Multiplier().compute().unwrap()).toBe(50);
+    });
+
+    it.each([0, false, "", null, undefined, () => 42])(
+      "preserves a falsy or callable receiver: %s",
+      (receiver) => {
+        const result = Result.gen(receiver, function* () {
+          const value = yield* Result.ok(this);
+          return Result.ok(value);
+        });
+
+        expect(result.unwrap()).toBe(receiver);
+      },
+    );
+
+    it("keeps the receiver during cleanup after a short-circuit", () => {
+      const receiver: { steps: string[] } = { steps: [] };
+      const result = Result.gen(receiver, function* () {
+        try {
+          yield* Result.err("failed");
+          this.steps.push("continued");
+          return Result.ok(1);
+        } finally {
+          this.steps.push("closed");
+        }
+      });
+
+      expect(result.status).toBe("error");
+      if (result.isErr()) expect(result.error).toBe("failed");
+      expect(receiver.steps).toEqual(["closed"]);
     });
   });
 
@@ -1705,6 +1738,39 @@ describe("Result", () => {
 
       expect(Result.isError(result)).toBe(true);
       expect(finallyCalled).toBe(true);
+    });
+
+    it("keeps private field access across an asynchronous yield", async () => {
+      class Multiplier {
+        #multiplier = 10;
+
+        compute() {
+          return Result.gen(this, async function* () {
+            const a = yield* Result.await(Promise.resolve(Result.ok(5)));
+            return Result.ok(a * this.#multiplier);
+          });
+        }
+      }
+
+      expect((await new Multiplier().compute()).unwrap()).toBe(50);
+    });
+
+    it("keeps the receiver during asynchronous cleanup after a short-circuit", async () => {
+      const receiver: { steps: string[] } = { steps: [] };
+      const result = await Result.gen(receiver, async function* () {
+        try {
+          yield* Result.await(Promise.resolve(Result.err("failed")));
+          this.steps.push("continued");
+          return Result.ok(1);
+        } finally {
+          await Promise.resolve();
+          this.steps.push("closed");
+        }
+      });
+
+      expect(result.status).toBe("error");
+      if (result.isErr()) expect(result.error).toBe("failed");
+      expect(receiver.steps).toEqual(["closed"]);
     });
   });
 
