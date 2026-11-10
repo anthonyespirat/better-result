@@ -54,6 +54,32 @@ const dashboard = await Result.gen(async function* () {
 
 Do not write `yield* await fetchUser()`. `Result.await` supplies the async iterable protocol needed by the generator and preserves the error type.
 
+## Passing `this`
+
+Generator functions do not capture the surrounding `this`. Pass the receiver as the second argument to `Result.gen` to bind it inside the generator.
+
+```ts
+class GetTask {
+  readonly #repository: TaskRepository;
+
+  constructor(repository: TaskRepository) {
+    this.#repository = repository;
+  }
+
+  execute(id: string) {
+    return Result.gen(function* (this) {
+      const repository = this.#repository;
+      const task = yield* repository.findById(id);
+      return Result.ok(task);
+    }, this);
+  }
+}
+```
+
+The generator's `this` parameter is TypeScript-only and gets its type from the second argument. That second argument supplies the receiver at runtime, so private fields and instance methods remain accessible. An explicit annotation such as `function* (this: GetTask)` is also supported.
+
+The same binding works with `Result.gen(async function* (this) { ... }, this)`. Use `Result.await` for asynchronous Result-returning operations; the receiver remains available after asynchronous yields and inside `finally` blocks.
+
 ## Cleanup behavior
 
 When an `Err` short-circuits, `Result.gen` closes the generator so `finally`, `Symbol.dispose`, and `Symbol.asyncDispose` cleanup can run. If generator body or cleanup code throws, `Result.gen` throws `Panic`.
